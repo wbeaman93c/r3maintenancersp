@@ -1,0 +1,10 @@
+const http=require('http'),fs=require('fs'),path=require('path');
+const PORT=process.env.PORT||3000, DATA=process.env.DATA_DIR||path.join(__dirname,'data'), FILE=path.join(DATA,'records.json');
+const defaults={vehicles:Array.from({length:24},(_,i)=>({unit:8300+i,mileage:0,lastOil:0,notes:''})),workOrders:[],equipment:[],orders:[]};
+function load(){try{return JSON.parse(fs.readFileSync(FILE,'utf8'))}catch{return structuredClone(defaults)}}
+function save(data){fs.mkdirSync(DATA,{recursive:true});fs.writeFileSync(FILE+'.tmp',JSON.stringify(data,null,2));fs.renameSync(FILE+'.tmp',FILE)}
+function send(res,code,obj){res.writeHead(code,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(obj))}
+const types={'html':'text/html','css':'text/css','js':'application/javascript','png':'image/png','svg':'image/svg+xml'};
+http.createServer((req,res)=>{const url=new URL(req.url,'http://localhost');if(url.pathname==='/api/data'){
+ if(req.method==='GET')return send(res,200,load());if(req.method==='PUT'){let raw='';req.on('data',b=>{raw+=b;if(raw.length>2000000)req.destroy()});req.on('end',()=>{try{let v=JSON.parse(raw);if(!v||!Array.isArray(v.vehicles)||!Array.isArray(v.workOrders)||!Array.isArray(v.equipment)||!Array.isArray(v.orders))throw Error('Invalid data');save(v);send(res,200,{ok:true})}catch(e){send(res,400,{error:e.message})}});return}return send(res,405,{error:'Method not allowed'})}
+ if(req.method!=='GET')return send(res,405,{error:'Method not allowed'});let name=url.pathname==='/'?'index.html':url.pathname.slice(1);let file=path.resolve(__dirname,'public',name);if(!file.startsWith(path.resolve(__dirname,'public')+path.sep))return send(res,403,{error:'Forbidden'});fs.readFile(file,(err,bytes)=>{if(err){res.writeHead(404);return res.end('Not found')}res.writeHead(200,{'Content-Type':types[path.extname(file).slice(1)]||'application/octet-stream'});res.end(bytes)})}).listen(PORT,'0.0.0.0',()=>console.log('Region 3 maintenance listening on '+PORT));
